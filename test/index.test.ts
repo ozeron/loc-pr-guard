@@ -6,8 +6,12 @@ import nock from 'nock'
 import myProbotApp from '../src'
 import { Probot } from 'probot'
 // Requiring our fixtures
-import payload from './fixtures/issues.opened.json'
-const issueCreatedBody = { body: 'Thanks for opening this issue!' }
+import payload from './fixtures/pull_request.synchronize.json'
+import compareSuccessPayload from './fixtures/compare.success.json'
+import compareFailurePayload from './fixtures/compare.failure.json'
+const checkCreateBody = { "name": "loc-guard", "head_sha": "a930751d19af64b9fcc737b7f9ff294152174472", "status":"queued"}
+const checkSuccessBody = { "conclusion": "success", "head_sha": "a930751d19af64b9fcc737b7f9ff294152174472", "name": "loc-guard", "output": {"summary": "It is ok", "title": "Checked LOC – It smaller than 1000"}, "status": "completed"}
+const checkFailureBody = { "conclusion": "failure", "head_sha": "a930751d19af64b9fcc737b7f9ff294152174472", "name": "loc-guard", "output": {"summary": "It is have problem", "title": "Checked LOC – It 1100, it's bigger than maximum 1000"}, "status": "completed"}
 
 nock.disableNetConnect()
 
@@ -23,22 +27,64 @@ describe('My Probot app', () => {
     app.app = () => 'test'
   })
 
-  test('creates a comment when an issue is opened', async (done) => {
+  afterEach(() => {
+    nock.cleanAll();
+  })
+
+  test('creates a check with success conclusion when additions less than 1000', async (done) => {
     // Test that we correctly return a test token
     nock('https://api.github.com')
-      .post('/app/installations/2/access_tokens')
-      .reply(200, { token: 'test' })
+      .post('/app/installations/738924/access_tokens')
+      .reply(200, { token: 'test' });
 
-    // Test that a comment is posted
+
     nock('https://api.github.com')
-      .post('/repos/hiimbex/testing-things/issues/1/comments', (body: any) => {
-        done(expect(body).toMatchObject(issueCreatedBody))
+      .get('/repos/ozeron/amazone_service/compare/533b99d5e676ba7303d0f9bfb6101b8d47cab689...a930751d19af64b9fcc737b7f9ff294152174472')
+      .reply(200, compareSuccessPayload);
+
+    // Test that a check is created
+    nock('https://api.github.com')
+      .post('/repos/ozeron/amazone_service/check-runs', (body: any) => {
+         expect(body).toMatchObject(checkCreateBody)
+         return true
+       })
+      .reply(200)
+      .post('/repos/ozeron/amazone_service/check-runs', (body: any) => {
+        done(expect(body).toMatchObject(checkSuccessBody))
         return true
       })
       .reply(200)
 
     // Receive a webhook event
-    await probot.receive({ name: 'issues', payload })
+    await probot.receive({ name: 'pull_request.synchronize', payload })
+  })
+
+  test('creates a check with failure conclusion when additions more than 1000', async (done) => {
+    // Test that we correctly return a test token
+    nock('https://api.github.com')
+      .post('/app/installations/738924/access_tokens')
+      .reply(200, { token: 'test' });
+
+
+    nock('https://api.github.com')
+      .get('/repos/ozeron/amazone_service/compare/533b99d5e676ba7303d0f9bfb6101b8d47cab689...a930751d19af64b9fcc737b7f9ff294152174472')
+      .reply(200, compareFailurePayload);
+
+    // Test that a check is created
+    nock('https://api.github.com')
+      .post('/repos/ozeron/amazone_service/check-runs', (body: any) => {
+         expect(body).toMatchObject(checkCreateBody)
+         return true
+       })
+      .reply(200)
+      .post('/repos/ozeron/amazone_service/check-runs', (body: any) => {
+        done(expect(body).toMatchObject(checkFailureBody))
+        return true
+      })
+      .reply(200)
+
+    // Receive a webhook event
+    await probot.receive({ name: 'pull_request.synchronize', payload })
   })
 })
 
