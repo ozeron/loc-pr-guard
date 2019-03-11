@@ -3,5 +3,5 @@ interface File {
 }
 
 export default function fileFilter (file: File) {
-  return !file.filename.includes('spec/');
+  return !file.filename.includes('spec/')
 }
